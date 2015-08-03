@@ -1,8 +1,8 @@
-# Album Solution Pack
+# Audio Album Solution Pack
 
 ## Introduction
 
-The Album Solution Pack is a sample solution pack that closely mirrors the Compound Object solution pack, but with simplifications that make it easier to demonstrate the hooks necessary to modify object relational RELS-EXT, as well as demonstrations of other hooks.
+The Audio Album Solution Pack is a sample solution pack that closely mirrors the Compound Object solution pack, but with the more focused theme of pairing Audio Solution Pack objects with a parent 'Album' object. To that end, it contains simplifications that make it easier to demonstrate the hooks necessary to modify object relational RELS-EXT, as well as demonstrations of other hooks.
 
 ## Installation
 
