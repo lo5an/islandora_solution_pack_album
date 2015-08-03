@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Sample hook implementations for a more complex solution pack.
+ * Sample hook implementations for a SP defining RELS-EXT relationships.
  */
 
 /**
@@ -49,10 +49,13 @@ function islandora_album_manage_tracklist_access(AbstractObject $object) {
  * Implements hook_islandora_edit_datastream_registry().
  */
 function islandora_album_islandora_edit_datastream_registry($object, $dsid) {
+  // The edit_datastream_registry hook runs once for each DSID on the object.
+  // We would like to place this solely on the LYRICS object.
   if ($dsid->id == 'LYRICS') {
     return array(
       array(
         'name' => t('LYRICS Edit Route'),
+        // This matches the edit route set up in islandora_audio_menu().
         'url' => "islandora/object/{$object->id}/datastreams/LYRICS/edit",
       ),
     );
@@ -108,7 +111,9 @@ function islandora_album_islandora_required_objects(IslandoraTuque $connection) 
 /**
  * Implements hook_cmodel_pid_islandora_object_purged().
  */
-function islandora_album_islandora_albumCModel_islandora_object_purged($pid) {
+function islandora_album_islandora_albumcmodel_islandora_object_purged($pid) {
+  // When we purge an islandora:albumCModel object, we also want to remove its
+  // relationships from any existing children, which is what we're up to here.
   $children = islandora_album_get_track_pids($pid);
   foreach ($children as $child) {
     $escaped_pid = str_replace(':', '_', $pid);
@@ -122,6 +127,10 @@ function islandora_album_islandora_albumCModel_islandora_object_purged($pid) {
  * Implements hook_islandora_basic_collection_get_query_optionals().
  */
 function islandora_album_islandora_basic_collection_get_query_optionals($type) {
+  // The plan here is to remove objects with an isTrackOf relationship from the
+  // collection display. To accomplish this, a query optional is set up to bind
+  // results to the graph that have isTrackOf relationships so that we can
+  // filter them out later.
   if ($type == 'view') {
     return format_string('?object <!uriisTrackOf> ?track', array(
       '!uri' => FEDORA_RELS_EXT_URI,
@@ -133,6 +142,8 @@ function islandora_album_islandora_basic_collection_get_query_optionals($type) {
  * Implements hook_islandora_basic_collection_get_query_filters().
  */
 function islandora_album_islandora_basic_collection_get_query_filters($type) {
+  // The actual filtration happens here - we negate anything that doesn't have
+  // a ?track value bound.
   if ($type == 'view') {
     return '!bound(?track)';
   }
@@ -142,6 +153,8 @@ function islandora_album_islandora_basic_collection_get_query_filters($type) {
  * Implements hook_islandora_solr_query().
  */
 function islandora_album_islandora_solr_query($islandora_solr_query) {
+  // Much the same as the SPARQL query filter, but for Solr instead. We remove
+  // any items that have isTrackOf entries in their Solr doc.
   $islandora_solr_query->solrParams['fq'][] = '-RELS_EXT_isTrackOf_uri_mt:[* TO *]';
 }
 
@@ -149,6 +162,8 @@ function islandora_album_islandora_solr_query($islandora_solr_query) {
  * Implements hook_islandora_get_breadcrumb_query_predicates().
  */
 function islandora_album_islandora_get_breadcrumb_query_predicates(AbstractObject $object) {
+  // And again, for the breadcrumbs. Rather than return the object we're looking
+  // at, return the parent instead.
   return array('fedora-rels-ext:isTrackOf');
 }
 
@@ -156,6 +171,11 @@ function islandora_album_islandora_get_breadcrumb_query_predicates(AbstractObjec
  * Implements hook_islandora_ingest_steps_alter().
  */
 function islandora_album_islandora_ingest_steps_alter(array &$steps, array &$form_state) {
+  // Here, we're hijacking the islandora_audio_upload ingest step and replacing
+  // it with a custom one in this module. This is the lazy (read: incorrect) way
+  // of doing it; realistically, we should be appending form elements to the
+  // actual audio upload form. This will suffice for demonstration purposes,
+  // though.
   $steps['islandora_audio_upload'] = array(
     'weight' => 10,
     'type' => 'form',
