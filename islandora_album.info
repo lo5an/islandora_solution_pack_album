@@ -1,0 +1,6 @@
+name = Islandora Audio Album
+description = Sample solution pack with code representing more complex object-to-object relationships
+dependencies[] = islandora
+package = Islandora Solution Packs
+core = 7.x
+version = 7.x-dev

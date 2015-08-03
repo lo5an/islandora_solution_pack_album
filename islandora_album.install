@@ -1,0 +1,16 @@
+<?php
+
+/**
+ * @file
+ * Install hooks.
+ */
+
+function islandora_album_install() {
+  module_load_include('inc', 'islandora', 'includes/solution_packs');
+  islandora_install_solution_pack('islandora_album');
+}
+
+function islandora_album_uninstall() {
+  module_load_include('inc', 'islandora', 'includes/solution_packs');
+  islandora_install_solution_pack('islandora_album', 'uninstall');
+}

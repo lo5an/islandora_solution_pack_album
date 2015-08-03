@@ -1,0 +1,225 @@
+<?php
+
+/**
+ * @file
+ * Sample hook implementations for a more complex solution pack.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function islandora_album_menu() {
+  $items = array();
+  $items['islandora/object/%islandora_object/datastreams/LYRICS/edit'] = array(
+    'title' => 'Edit LYRICS Datastream',
+    'file' => 'includes/lyrics.form.inc',
+    'page callback' => 'islandora_album_edit_lyrics',
+    'page arguments' => array(2),
+    'access callback' => 'islandora_album_edit_lyrics_access',
+    'access arguments' => array(2),
+    'type' => MENU_CALLBACK,
+  );
+  $items['islandora/object/%islandora_object/manage/tracklist'] = array(
+    'title' => 'Tracklist',
+    'page callback' => 'islandora_album_manage_tracklist',
+    'page arguments' => array(2),
+    'access callback' => 'islandora_album_manage_tracklist_access',
+    'access arguments' => array(2),
+    'file' => 'includes/manage.form.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+  return $items;
+}
+
+/**
+ * Access callback for lyrics editing.
+ */
+function islandora_album_edit_lyrics_access(AbstractObject $object) {
+  return (isset($object['LYRICS']) && $object['LYRICS']->mimetype == 'text/plain'); 
+}
+
+/**
+ * Access callback for tracklist management.
+ */
+function islandora_album_manage_tracklist_access(AbstractObject $object) {
+  return in_array('islandora:albumCModel', $object->models);
+}
+
+/**
+ * Implements hook_islandora_edit_datastream_registry().
+ */
+function islandora_album_islandora_edit_datastream_registry($object, $dsid) {
+  if ($dsid->id == 'LYRICS') {
+    return array(
+      array(
+        'name' => t('LYRICS Edit Route'),
+        'url' => "islandora/object/{$object->id}/datastreams/LYRICS/edit",
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_islandora_required_objects().
+ */
+function islandora_album_islandora_required_objects(IslandoraTuque $connection) {
+  $path = drupal_get_path('module', 'islandora_album');
+  // Content Model.
+  $cmodel = $connection->repository->constructObject('islandora:albumCModel');
+  $cmodel->owner = 'fedoraAdmin';
+  $cmodel->label = 'Islandora Album Content Model';
+  $cmodel->models = 'fedora-system:ContentModel-3.0';
+  // Content Model: DS-COMPOSITE-MODEL.
+  $ds_cm = $cmodel->constructDatastream('DS-COMPOSITE-MODEL', 'X');
+  $ds_cm->label = 'DS-COMPOSITE-MODEL';
+  $ds_cm->mimetype = 'application/xml';
+  $ds_cm->setContentFromFile("$path/xml/islandora_album_ds_composite_model.xml", FALSE);
+  $cmodel->ingestDatastream($ds_cm);
+  // Collection.
+  $collection = $connection->repository->constructObject('islandora:album_collection');
+  $collection->owner = 'fedoraAdmin';
+  $collection->label = 'Album Collection';
+  $collection->models = 'islandora:collectionCModel';
+  $collection->relationships->add(FEDORA_RELS_EXT_URI, 'isMemberOfCollection', 'islandora:root');
+  // Collection: Collection Policy.
+  $policy = $collection->constructDatastream('COLLECTION_POLICY', 'X');
+  $policy->label = 'Collection Policy';
+  $policy->mimetype = 'application/xml';
+  $policy->setContentFromFile("$path/xml/islandora_album_collection_policy.xml", FALSE);
+  $collection->ingestDatastream($policy);
+  // Collection: Thumbnail.
+  $tn = $collection->constructDatastream('TN', 'M');
+  $tn->label = 'Thumbnail';
+  $tn->mimetype = 'image/png';
+  $tn->setContentFromFile("$path/images/folder.png", FALSE);
+  $collection->ingestDatastream($tn);
+
+  return array(
+    'islandora_album' => array(
+      'title' => 'Islandora Album',
+      'objects' => array(
+        $cmodel,
+        $collection,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_cmodel_pid_islandora_object_purged().
+ */
+function islandora_album_islandora_albumCModel_islandora_object_purged($pid) {
+  $children = islandora_album_get_track_pids($pid);
+  foreach ($children as $child) {
+    $escaped_pid = str_replace(':', '_', $pid);
+    $child_object = islandora_object_load($child['pid']);
+    $child_object->relationships->remove(FEDORA_RELS_EXT_URI, 'isTrackOf', $pid);
+    $child_object->relationships->remove(ISLANDORA_RELS_EXT_URI, "isTrackNumberOf$escaped_pid");
+  }
+}
+
+/**
+ * Implements hook_islandora_basic_collection_get_query_optionals().
+ */
+function islandora_album_islandora_basic_collection_get_query_optionals($type) {
+  if ($type == 'view') {
+    return format_string('?object <!uriisTrackOf> ?track', array(
+      '!uri' => FEDORA_RELS_EXT_URI,
+    ));
+  }
+}
+
+/**
+ * Implements hook_islandora_basic_collection_get_query_filters().
+ */
+function islandora_album_islandora_basic_collection_get_query_filters($type) {
+  if ($type == 'view') {
+    return '!bound(?track)';
+  }
+}
+
+/**
+ * Implements hook_islandora_solr_query().
+ */
+function islandora_album_islandora_solr_query($islandora_solr_query) {
+  $islandora_solr_query->solrParams['fq'][] = '-RELS_EXT_isTrackOf_uri_mt:[* TO *]';
+}
+
+/**
+ * Implements hook_islandora_get_breadcrumb_query_predicates().
+ */
+function islandora_album_islandora_get_breadcrumb_query_predicates(AbstractObject $object) {
+  return array('fedora-rels-ext:isTrackOf');
+}
+
+/**
+ * Implements hook_islandora_ingest_steps_alter().
+ */
+function islandora_album_islandora_ingest_steps_alter(array &$steps, array &$form_state) {
+  $steps['islandora_audio_upload'] = array(
+    'weight' => 10,
+    'type' => 'form',
+    'form_id' => 'islandora_album_audio_upload_form',
+    'module' => 'islandora_album',
+    'file' => 'includes/audio_upload.form.inc',
+  );
+}
+
+/**
+ * Gets the tracks on an album.
+ */
+function islandora_album_get_track_pids($pid, $pids_only = FALSE) {
+  $objects = array();
+
+  $connection = islandora_get_tuque_connection();
+  $escaped_pid = str_replace(':', '_', $pid);
+  if ($connection) {
+    $query = <<<EOQ
+PREFIX islandora-rels-ext: <http://islandora.ca/ontology/relsext#>
+SELECT ?pid ?track ?title
+FROM <#ri>
+WHERE {
+  ?pid <fedora-model:label> ?title ;
+       <fedora-rels-ext:isTrackOf> <info:fedora/$pid> .
+  OPTIONAL {
+    ?pid islandora-rels-ext:isTrackNumberOf$escaped_pid ?track
+  }
+}
+EOQ;
+    $results = $connection->repository->ri->sparqlQuery($query);
+
+    $sort = function($a, $b) {
+      $a = $a['track']['value'];
+      $b = $b['track']['value'];
+      if ($a === $b) {
+        return 0;
+      }
+      if (empty($a)) {
+        return -1;
+      }
+      if ($empty($b)) {
+        return -1;
+      }
+      return $a - $b;
+    };
+    uasort($results, $sort);
+
+    foreach ($results as $result) {
+      $object = islandora_object_load($result['pid']['value']);
+      if (islandora_object_access(ISLANDORA_VIEW_OBJECTS, $object)) {
+        if ($pids_only) {
+          $objects[] = $result['pid']['value'];
+        }
+        else {
+          $objects[$result['pid']['value']] = array(
+            'pid' => $result['pid']['value'],
+            'track' => $result['track']['value'],
+            'title' => $result['title']['value'],
+          );
+        }
+      }
+    }
+  }
+
+  return $objects;
+}
