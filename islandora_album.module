@@ -188,6 +188,46 @@ function islandora_album_islandora_ingest_steps_alter(array &$steps, array &$for
 }
 
 /**
+ * Implements hook_cmodel_pid_dsid_islandora_datastream_alter().
+ */
+function islandora_album_islandora_sp_audiocmodel_lyrics_islandora_datastream_alter(AbstractObject $object, AbstractDatastream $datastream, array &$context) {
+  // Get the parent, so we can get the rest of the children.
+  $track_of = $object->relationships->get(FEDORA_RELS_EXT_URI, 'isTrackOf');
+  $track_of = islandora_object_load($track_of[0]['object']['value']);
+  if ($track_of) {
+    $connection = islandora_get_tuque_connection();
+    $new_lyrics = '';
+
+    // Get the tracks.
+    $tracks = islandora_album_get_track_pids($track_of->id, TRUE);
+
+    // If there are no tracks, we're done here.
+    if (empty($tracks)) {
+      return;
+    }
+
+    // Generate a FULL_LYRICS datastream if necessary.
+    if (!isset($track_of['FULL_LYRICS'])) {
+      $full_lyrics = $object->constructDatastream('FULL_LYRICS', 'M');
+      $full_lyrics->mimetype = 'text/plain';
+      $full_lyrics->label = 'Full Lyrics';
+      $track_of->ingestDatastream($full_lyrics);
+    }
+
+    // Cycle through the tracks to post it.
+    foreach ($tracks as $result) {
+      $child = islandora_object_load($result);
+      $new_lyrics .= $object->label . "\n\n";
+      $datastream = islandora_datastream_load('LYRICS', $child);
+      $new_lyrics .= $datastream->content . "\n\n";
+    }
+    $new_lyrics = substr($new_lyrics, 0, -2);
+    // Set the content.
+    $track_of['FULL_LYRICS']->setContentFromString($new_lyrics);
+  }
+}
+
+/**
  * Gets the tracks on an album.
  */
 function islandora_album_get_track_pids($pid, $pids_only = FALSE) {
@@ -219,7 +259,7 @@ EOQ;
       if (empty($a)) {
         return -1;
       }
-      if ($empty($b)) {
+      if (empty($b)) {
         return -1;
       }
       return $a - $b;
