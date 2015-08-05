@@ -176,13 +176,15 @@ function islandora_album_islandora_ingest_steps_alter(array &$steps, array &$for
   // of doing it; realistically, we should be appending form elements to the
   // actual audio upload form. This will suffice for demonstration purposes,
   // though.
-  $steps['islandora_audio_upload'] = array(
-    'weight' => 10,
-    'type' => 'form',
-    'form_id' => 'islandora_album_audio_upload_form',
-    'module' => 'islandora_album',
-    'file' => 'includes/audio_upload.form.inc',
-  );
+  if (isset($steps['islandora_audio_upload'])) {
+    $steps['islandora_audio_upload'] = array(
+      'weight' => 10,
+      'type' => 'form',
+      'form_id' => 'islandora_album_audio_upload_form',
+      'module' => 'islandora_album',
+      'file' => 'includes/audio_upload.form.inc',
+    );
+  }
 }
 
 /**
